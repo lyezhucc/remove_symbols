@@ -3,7 +3,7 @@ import os
 
 def remove_symbols_from_file(file_path):
     """
-    Removes '##', '**', '————', and '---' from a file.
+    Removes '##', '###', '**', '————', and '---' from a file.
 
     Args:
         file_path (str): The path to the file to be processed.
@@ -13,6 +13,7 @@ def remove_symbols_from_file(file_path):
             content = f.read()
 
         content = content.replace('##', '')
+        content = content.replace('###', '')
         content = content.replace('**', '')
         content = content.replace('————', '')
         content = content.replace('---', '')
