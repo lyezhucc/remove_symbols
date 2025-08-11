@@ -1,9 +1,10 @@
 import sys
 import os
+import re
 
 def remove_symbols_from_file(file_path):
     """
-    Removes '##', '###', '**', '————', and '---' from a file.
+    Removes '##', '###', '**' symbols, and lines containing only '————' or '---'.
 
     Args:
         file_path (str): The path to the file to be processed.
@@ -12,16 +13,19 @@ def remove_symbols_from_file(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
+        # For inline symbols, simple replace is fine
         content = content.replace('##', '')
         content = content.replace('###', '')
         content = content.replace('**', '')
-        content = content.replace('————', '')
-        content = content.replace('---', '')
+
+        # For line-based symbols, use regex to remove the whole line
+        content = re.sub(r'^\s*(?:---|————)\s*$\n?', '', content, flags=re.MULTILINE)
 
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
         print(f"Successfully processed file: {file_path}")
+
 
     except FileNotFoundError:
         print(f"Error: File not found at {file_path}")
