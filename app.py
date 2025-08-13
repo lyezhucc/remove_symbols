@@ -6,17 +6,22 @@ import platform
 import subprocess
 
 # --- Core Processing Logic ---
+def process_content(content):
+    """Removes markdown symbols from a string."""
+    content = content.replace('**', '')
+    content = content.replace('*', '')
+    content = re.sub(r'^#+\s*', '', content, flags=re.MULTILINE)
+    content = re.sub(r'^\s*(?:---|————)\s*$\n?', '', content, flags=re.MULTILINE)
+    return content
+
+
 def process_file_content(file_path):
     """Reads a file, removes symbols, and saves to a new file with a suffix."""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-
-        # --- Symbol Removal ---
-        content = content.replace('**', '')
-        content = content.replace('*', '')
-        content = re.sub(r'^#+\s*', '', content, flags=re.MULTILINE)
-        content = re.sub(r'^\s*(?:---|————)\s*$\n?', '', content, flags=re.MULTILINE)
+        
+        processed_content = process_content(content)
 
         # --- Generate New File Path ---
         base_path, extension = os.path.splitext(file_path)
@@ -24,7 +29,7 @@ def process_file_content(file_path):
 
         # --- Write to New File ---
         with open(new_file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+            f.write(processed_content)
         return True, new_file_path # Return the new path on success
     except Exception as e:
         return False, str(e)
@@ -37,16 +42,23 @@ class App(customtkinter.CTk):
 
         # --- Window Setup ---
         self.title("Markdown 符号清理工具")
-        self.geometry("700x550") # Increased height for new button
+        self.geometry("700x550")
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        self.file_list = []
-        self.last_output_folder = None
+        # --- Create Tabview ---
+        self.tabview = customtkinter.CTkTabview(self, corner_radius=0)
+        self.tabview.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.tabview.add("文件处理")
+        self.tabview.add("文本处理")
 
-        # --- Widget Creation ---
-        self.top_frame = customtkinter.CTkFrame(self, corner_radius=0)
-        self.top_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        # --- Configure File Processing Tab ---
+        self.file_tab = self.tabview.tab("文件处理")
+        self.file_tab.grid_columnconfigure(0, weight=1)
+        self.file_tab.grid_rowconfigure(1, weight=1)
+
+        self.top_frame = customtkinter.CTkFrame(self.file_tab, corner_radius=0, fg_color="transparent")
+        self.top_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
         self.top_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.select_files_button = customtkinter.CTkButton(self.top_frame, text="选择文件", command=self.select_files_callback)
@@ -58,12 +70,12 @@ class App(customtkinter.CTk):
         self.start_button = customtkinter.CTkButton(self.top_frame, text="开始清理", command=self.start_processing_callback, fg_color="#28a745", hover_color="#218838")
         self.start_button.grid(row=0, column=2, padx=5, pady=10)
 
-        self.textbox = customtkinter.CTkTextbox(self, corner_radius=0)
-        self.textbox.grid(row=1, column=0, sticky="nsew", padx=10, pady=0)
-        self.textbox.insert("0.0", "已选文件会显示在这里...\n")
+        self.file_list_textbox = customtkinter.CTkTextbox(self.file_tab, corner_radius=0)
+        self.file_list_textbox.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        self.file_list_textbox.insert("0.0", "已选文件会显示在这里...\n")
 
-        self.bottom_frame = customtkinter.CTkFrame(self, corner_radius=0)
-        self.bottom_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+        self.bottom_frame = customtkinter.CTkFrame(self.file_tab, corner_radius=0, fg_color="transparent")
+        self.bottom_frame.grid(row=2, column=0, sticky="ew", padx=0, pady=5)
         self.bottom_frame.grid_columnconfigure(0, weight=1)
 
         self.status_label = customtkinter.CTkLabel(self.bottom_frame, text="准备就绪", anchor="w")
@@ -72,7 +84,56 @@ class App(customtkinter.CTk):
         self.open_folder_button = customtkinter.CTkButton(self.bottom_frame, text="📂 打开所在文件夹", command=self.open_output_folder_callback, width=160)
         self.open_folder_button.grid(row=0, column=1, padx=5)
 
+        self.file_list = []
+        self.last_output_folder = None
+
+        # --- Configure Text Processing Tab ---
+        self.text_tab = self.tabview.tab("文本处理")
+        self.text_tab.grid_columnconfigure(0, weight=1)
+        self.text_tab.grid_rowconfigure(1, weight=1)
+        self.text_tab.grid_rowconfigure(3, weight=1)
+
+        self.input_textbox_label = customtkinter.CTkLabel(self.text_tab, text="在此处粘贴要处理的文本:")
+        self.input_textbox_label.grid(row=0, column=0, padx=20, pady=(10, 0), sticky="w")
+        self.input_textbox = customtkinter.CTkTextbox(self.text_tab, height=150)
+        self.input_textbox.grid(row=1, column=0, padx=20, pady=(5, 10), sticky="nsew")
+
+        self.process_text_button = customtkinter.CTkButton(self.text_tab, text="处理文本", command=self.process_text_callback)
+        self.process_text_button.grid(row=2, column=0, padx=20, pady=10)
+
+        self.output_textbox_label = customtkinter.CTkLabel(self.text_tab, text="处理结果:")
+        self.output_textbox_label.grid(row=3, column=0, padx=20, pady=(10, 0), sticky="w")
+        self.output_textbox = customtkinter.CTkTextbox(self.text_tab, height=150, state="disabled")
+        self.output_textbox.grid(row=4, column=0, padx=20, pady=(5, 10), sticky="nsew")
+        
+        self.copy_button = customtkinter.CTkButton(self.text_tab, text="复制结果", command=self.copy_text_callback)
+        self.copy_button.grid(row=5, column=0, padx=20, pady=10)
+
     # --- Callback Functions ---
+
+    def process_text_callback(self):
+        input_text = self.input_textbox.get("1.0", "end-1c")
+        if not input_text.strip():
+            self.output_textbox.configure(state="normal")
+            self.output_textbox.delete("1.0", "end")
+            self.output_textbox.insert("1.0", "请输入文本后再试。")
+            self.output_textbox.configure(state="disabled")
+            return
+
+        processed_text = process_content(input_text)
+        
+        self.output_textbox.configure(state="normal")
+        self.output_textbox.delete("1.0", "end")
+        self.output_textbox.insert("1.0", processed_text)
+        self.output_textbox.configure(state="disabled")
+
+    def copy_text_callback(self):
+        text_to_copy = self.output_textbox.get("1.0", "end-1c")
+        if text_to_copy.strip():
+            self.clipboard_clear()
+            self.clipboard_append(text_to_copy)
+            # Also update the main status label to give feedback
+            self.status_label.configure(text="提示: 已复制结果到剪贴板。")
 
     def open_output_folder_callback(self):
         if self.last_output_folder and os.path.isdir(self.last_output_folder):
@@ -138,12 +199,12 @@ class App(customtkinter.CTk):
         self.file_list = []
 
     def update_textbox(self):
-        self.textbox.delete("0.0", "end")
+        self.file_list_textbox.delete("0.0", "end")
         unique_files = sorted(list(set(self.file_list)))
         if not unique_files:
-             self.textbox.insert("0.0", "已选文件会显示在这里...\n")
+             self.file_list_textbox.insert("0.0", "已选文件会显示在这里...\n")
         else:
-            self.textbox.insert("0.0", "准备处理以下文件：\n\n" + "\n".join(unique_files))
+            self.file_list_textbox.insert("0.0", "准备处理以下文件：\n\n" + "\n".join(unique_files))
 
 
 # --- Main Execution ---
